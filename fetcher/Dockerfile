@@ -3,7 +3,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY fetcher ./fetcher
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=mod -o /out/fetcher ./fetcher/cmd/fetcher
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=mod -o /out/fetcher ./fetcher
 
 FROM alpine:3.21
 RUN apk --no-cache add ca-certificates
