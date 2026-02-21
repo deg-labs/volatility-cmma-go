@@ -50,10 +50,8 @@ func main() {
 		}
 
 		elapsed := time.Since(start)
-		wait := time.Duration(cfg.FetchIntervalSeconds)*time.Second - elapsed
-		if wait < 0 {
-			wait = 0
-		}
+		wait := time.Duration(cfg.FetchIntervalSeconds) * time.Second
+
 		logger.Printf("cycle complete in %.2fs, waiting %.2fs", elapsed.Seconds(), wait.Seconds())
 
 		select {
