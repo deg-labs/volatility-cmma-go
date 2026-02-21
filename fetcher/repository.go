@@ -72,7 +72,7 @@ func upsertRows(db *sql.DB, timeframe string, rowsBySymbol map[string][]klineRow
 	return tx.Commit()
 }
 
-func cleanupOldRows(db *sql.DB, timeframe string, rowsBySymbol map[string][]klineRow, historyLimit int) error {
+func cleanupOldRows(db *sql.DB, timeframe string, historyLimit int) error {
 	tableName, err := safeTableName(timeframe)
 	if err != nil {
 		return err
@@ -84,26 +84,37 @@ func cleanupOldRows(db *sql.DB, timeframe string, rowsBySymbol map[string][]klin
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare(fmt.Sprintf(`
-		DELETE FROM %s WHERE rowid IN (
-			SELECT rowid FROM %s
-			WHERE symbol = ?
-			ORDER BY timestamp DESC
-			LIMIT -1 OFFSET ?
+	query := fmt.Sprintf(`
+		DELETE FROM %s
+		WHERE rowid IN (
+			SELECT rowid
+			FROM (
+				SELECT
+					rowid,
+					ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) AS rn
+				FROM %s
+			)
+			WHERE rn > ?
 		)
-	`, tableName, tableName))
-	if err != nil {
+	`, tableName, tableName)
+	if _, err := tx.Exec(query, historyLimit); err != nil {
 		return err
-	}
-	defer stmt.Close()
-
-	for symbol := range rowsBySymbol {
-		if _, err := stmt.Exec(symbol, historyLimit); err != nil {
-			return err
-		}
 	}
 
 	return tx.Commit()
+}
+
+func timeframeHasRows(db *sql.DB, timeframe string) (bool, error) {
+	tableName, err := safeTableName(timeframe)
+	if err != nil {
+		return false, err
+	}
+	query := fmt.Sprintf(`SELECT EXISTS (SELECT 1 FROM %s LIMIT 1)`, tableName)
+	var exists int
+	if err := db.QueryRow(query).Scan(&exists); err != nil {
+		return false, err
+	}
+	return exists == 1, nil
 }
 
 func safeTableName(timeframe string) (string, error) {
