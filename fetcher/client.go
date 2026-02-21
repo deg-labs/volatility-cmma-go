@@ -122,6 +122,74 @@ func getKlineData(ctx context.Context, httpClient *http.Client, baseURL, symbol,
 	return rows, nil
 }
 
+func getKlineDataByTimeRange(
+	ctx context.Context,
+	httpClient *http.Client,
+	baseURL, symbol, interval string,
+	startMs, endMs int64,
+	limit int,
+) ([]klineRow, error) {
+	if limit <= 0 {
+		limit = 1
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	url := fmt.Sprintf(
+		"%s/v5/market/kline?category=linear&symbol=%s&interval=%s&start=%d&end=%d&limit=%d",
+		baseURL, symbol, interval, startMs, endMs, limit,
+	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var payload bybitKlineResp
+	if err := runBybitWithRetry(ctx, "kline-range", func() error {
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			return err
+		}
+		if resp.StatusCode >= 300 {
+			return fmt.Errorf("status=%d", resp.StatusCode)
+		}
+		if payload.RetCode != 0 {
+			return fmt.Errorf("retCode=%d retMsg=%s", payload.RetCode, payload.RetMsg)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	rows := make([]klineRow, 0, len(payload.Result.List))
+	for _, item := range payload.Result.List {
+		if len(item) < 7 {
+			continue
+		}
+		ts, err := strconv.ParseInt(item[0], 10, 64)
+		if err != nil {
+			continue
+		}
+		op, err1 := strconv.ParseFloat(item[1], 64)
+		hi, err2 := strconv.ParseFloat(item[2], 64)
+		lo, err3 := strconv.ParseFloat(item[3], 64)
+		cl, err4 := strconv.ParseFloat(item[4], 64)
+		vol, err5 := strconv.ParseFloat(item[5], 64)
+		to, err6 := strconv.ParseFloat(item[6], 64)
+		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil || err6 != nil {
+			continue
+		}
+		rows = append(rows, klineRow{TS: ts, Open: op, High: hi, Low: lo, Close: cl, Volume: vol, Turnover: to})
+	}
+	return rows, nil
+}
+
 func runBybitWithRetry(ctx context.Context, operation string, fn func() error) error {
 	var lastErr error
 	maxAttempts := len(bybitRetryDelays) + 1

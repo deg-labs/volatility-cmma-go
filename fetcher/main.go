@@ -38,12 +38,14 @@ func main() {
 	defer stop()
 
 	logger.Printf("fetcher started, timeframes=%v interval=%ds", cfg.Timeframes, cfg.FetchIntervalSeconds)
+	firstCycle := true
 
 	for {
 		start := time.Now()
-		if err := fetchAndStore(ctx, logger, httpClient, db, cfg); err != nil && !errors.Is(err, context.Canceled) {
+		if err := fetchAndStore(ctx, logger, httpClient, db, cfg, firstCycle); err != nil && !errors.Is(err, context.Canceled) {
 			logger.Printf("fetch cycle error: %v", err)
 		}
+		firstCycle = false
 		if ctx.Err() != nil {
 			logger.Printf("fetcher stopped")
 			return

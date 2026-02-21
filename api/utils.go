@@ -126,7 +126,7 @@ func getEnv(key, fallback string) string {
 
 func configureSQLiteForReader(db *sql.DB) error {
 	pragmas := []string{
-		"PRAGMA busy_timeout = 10000",
+		"PRAGMA busy_timeout = 1000",
 		"PRAGMA journal_mode = WAL",
 		"PRAGMA query_only = ON",
 		"PRAGMA cache_size = -65536",

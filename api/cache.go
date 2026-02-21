@@ -24,8 +24,9 @@ type marketDataCache struct {
 	historyLimit int
 	refreshEvery time.Duration
 
-	mu        sync.RWMutex
-	snapshots map[string]marketSnapshot
+	mu         sync.RWMutex
+	snapshots  map[string]marketSnapshot
+	refreshing map[string]bool
 }
 
 func newMarketDataCache(db *sql.DB, historyLimit int, refreshEvery time.Duration) *marketDataCache {
@@ -37,6 +38,7 @@ func newMarketDataCache(db *sql.DB, historyLimit int, refreshEvery time.Duration
 		historyLimit: historyLimit,
 		refreshEvery: refreshEvery,
 		snapshots:    make(map[string]marketSnapshot),
+		refreshing:   make(map[string]bool),
 	}
 }
 
@@ -49,17 +51,21 @@ func (c *marketDataCache) getSnapshot(timeframe string) (marketSnapshot, error) 
 	if ok && now.Sub(snapshot.refreshedAt) < c.refreshEvery {
 		return snapshot, nil
 	}
+	if ok {
+		c.refreshSnapshotAsync(timeframe)
+		return snapshot, nil
+	}
 
 	return c.refreshSnapshot(timeframe, now)
 }
 
 func (c *marketDataCache) refreshSnapshot(timeframe string, now time.Time) (marketSnapshot, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
+	c.mu.RLock()
 	if snapshot, ok := c.snapshots[timeframe]; ok && now.Sub(snapshot.refreshedAt) < c.refreshEvery {
+		c.mu.RUnlock()
 		return snapshot, nil
 	}
+	c.mu.RUnlock()
 
 	tableName, err := safeTableName(timeframe)
 	if err != nil {
@@ -106,6 +112,27 @@ func (c *marketDataCache) refreshSnapshot(timeframe string, now time.Time) (mark
 		seriesBySymbol: seriesBySymbol,
 		refreshedAt:    now,
 	}
+	c.mu.Lock()
 	c.snapshots[timeframe] = snapshot
+	c.mu.Unlock()
 	return snapshot, nil
+}
+
+func (c *marketDataCache) refreshSnapshotAsync(timeframe string) {
+	c.mu.Lock()
+	if c.refreshing[timeframe] {
+		c.mu.Unlock()
+		return
+	}
+	c.refreshing[timeframe] = true
+	c.mu.Unlock()
+
+	go func() {
+		defer func() {
+			c.mu.Lock()
+			c.refreshing[timeframe] = false
+			c.mu.Unlock()
+		}()
+		_, _ = c.refreshSnapshot(timeframe, time.Now().UTC())
+	}()
 }

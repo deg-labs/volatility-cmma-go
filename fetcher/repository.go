@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
+	"time"
 )
 
 func ensureTables(db *sql.DB, timeframes []string) error {
@@ -115,6 +117,124 @@ func timeframeHasRows(db *sql.DB, timeframe string) (bool, error) {
 		return false, err
 	}
 	return exists == 1, nil
+}
+
+func detectMissingTimestamps(
+	db *sql.DB,
+	timeframe string,
+	historyLimit int,
+	stepMs int64,
+	symbols []string,
+) (map[string][]int64, error) {
+	if historyLimit <= 1 || stepMs <= 0 {
+		return map[string][]int64{}, nil
+	}
+
+	targetSymbols := make(map[string]struct{}, len(symbols))
+	for _, s := range symbols {
+		targetSymbols[s] = struct{}{}
+	}
+
+	tableName, err := safeTableName(timeframe)
+	if err != nil {
+		return nil, err
+	}
+
+	query := fmt.Sprintf(`
+		SELECT symbol, timestamp
+		FROM (
+			SELECT
+				symbol,
+				timestamp,
+				ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) AS rn
+			FROM %s
+		)
+		WHERE rn <= ?
+		ORDER BY symbol ASC, timestamp DESC
+	`, tableName)
+
+	rows, err := db.Query(query, historyLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	nowMs := time.Now().UnixMilli()
+	result := make(map[string][]int64)
+
+	currentSymbol := ""
+	timestamps := make([]int64, 0, historyLimit)
+
+	flush := func() {
+		if currentSymbol == "" {
+			return
+		}
+		if _, ok := targetSymbols[currentSymbol]; !ok {
+			return
+		}
+		missing := computeMissingTimestamps(timestamps, stepMs, nowMs)
+		if len(missing) > 0 {
+			result[currentSymbol] = missing
+		}
+	}
+
+	for rows.Next() {
+		var symbol string
+		var ts int64
+		if err := rows.Scan(&symbol, &ts); err != nil {
+			return nil, err
+		}
+
+		if currentSymbol == "" {
+			currentSymbol = symbol
+		}
+		if symbol != currentSymbol {
+			flush()
+			currentSymbol = symbol
+			timestamps = timestamps[:0]
+		}
+		timestamps = append(timestamps, ts)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	flush()
+
+	return result, nil
+}
+
+func computeMissingTimestamps(timestamps []int64, stepMs int64, nowMs int64) []int64 {
+	if len(timestamps) == 0 || stepMs <= 0 {
+		return nil
+	}
+
+	missingSet := make(map[int64]struct{})
+
+	latestClosed := nowMs - (nowMs % stepMs) - stepMs
+	if latestClosed > timestamps[0] {
+		for ts := latestClosed; ts > timestamps[0]; ts -= stepMs {
+			missingSet[ts] = struct{}{}
+		}
+	}
+
+	for i := 0; i < len(timestamps)-1; i++ {
+		newer := timestamps[i]
+		older := timestamps[i+1]
+		for ts := newer - stepMs; ts > older; ts -= stepMs {
+			missingSet[ts] = struct{}{}
+		}
+	}
+
+	if len(missingSet) == 0 {
+		return nil
+	}
+
+	missing := make([]int64, 0, len(missingSet))
+	for ts := range missingSet {
+		missing = append(missing, ts)
+	}
+	sort.Slice(missing, func(i, j int) bool { return missing[i] > missing[j] })
+	return missing
 }
 
 func safeTableName(timeframe string) (string, error) {
