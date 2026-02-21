@@ -1,0 +1,55 @@
+services:
+  fetcher:
+    build:
+      context: .
+      dockerfile: fetcher/Dockerfile
+    container_name: volatility-cmma-go-fetcher
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: volatility-cmma-go-api
+    depends_on:
+      - fetcher
+    volumes:
+      - ./data:/app/data:ro
+    env_file:
+      - .env
+    environment:
+      - OHLCV_HISTORY_LIMIT=${OHLCV_HISTORY_LIMIT}
+      - DB_PATH=/app/data/cmma.db
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  nginx:
+    build:
+      context: nginx
+      dockerfile: Dockerfile
+    image: docker.io/library/nginx:latest
+    container_name: volatility-cmma-go-nginx
+    depends_on:
+      - api
+    ports:
+      - "8001:80"
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"

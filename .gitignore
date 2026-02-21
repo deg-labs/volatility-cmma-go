@@ -1,0 +1,7 @@
+.env
+cache
+.cache
+data
+logs
+*.db
+*.db-journal
