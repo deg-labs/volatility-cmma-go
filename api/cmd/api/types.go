@@ -53,4 +53,5 @@ type volumeItem struct {
 type apiServer struct {
 	db                *sql.DB
 	ohlcvHistoryLimit int
+	marketCache       *marketDataCache
 }

@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -79,68 +81,41 @@ func (s *apiServer) volatilityHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, volatilityResponse{Count: len(items), Data: items})
 }
 
-func (s *apiServer) queryVolatility(timeframe string, threshold float64, offset int, direction, sort string, limit int) ([]volatilityItem, error) {
-	table, err := safeTableName(timeframe)
+func (s *apiServer) queryVolatility(timeframe string, threshold float64, offset int, direction, sortKey string, limit int) ([]volatilityItem, error) {
+	snapshot, err := s.marketCache.getSnapshot(timeframe)
 	if err != nil {
 		return nil, err
 	}
 
-	orderBy := "volatility_pct DESC"
-	switch sort {
-	case "volatility_asc":
-		orderBy = "volatility_pct ASC"
-	case "symbol_asc":
-		orderBy = "symbol ASC"
-	}
-
-	query := fmt.Sprintf(`
-		WITH symbols AS (
-			SELECT DISTINCT symbol
-			FROM %s
-		),
-		latest_and_previous AS (
-			SELECT
-				s.symbol,
-				(SELECT t.timestamp FROM %s t WHERE t.symbol = s.symbol ORDER BY t.timestamp DESC LIMIT 1) AS candle_ts,
-				(SELECT t.close FROM %s t WHERE t.symbol = s.symbol ORDER BY t.timestamp DESC LIMIT 1) AS close,
-				(SELECT t.close FROM %s t WHERE t.symbol = s.symbol ORDER BY t.timestamp DESC LIMIT 1 OFFSET ?) AS prev_close
-			FROM symbols s
-		)
-		SELECT
-			lp.symbol,
-			lp.candle_ts,
-			lp.close,
-			lp.prev_close,
-			((lp.close - lp.prev_close) / lp.prev_close) * 100 AS volatility_pct,
-			? as timeframe
-		FROM latest_and_previous lp
-		WHERE
-			lp.prev_close IS NOT NULL
-			AND ABS(((lp.close - lp.prev_close) / lp.prev_close) * 100) >= ?
-			AND CASE
-				WHEN ? = 'up' THEN ((lp.close - lp.prev_close) / lp.prev_close) > 0
-				WHEN ? = 'down' THEN ((lp.close - lp.prev_close) / lp.prev_close) < 0
-				ELSE TRUE
-			END
-		ORDER BY %s
-		LIMIT ?
-	`, table, table, table, table, orderBy)
-
-	rows, err := s.db.Query(query, offset, timeframe, threshold, direction, direction, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	items := make([]volatilityItem, 0)
-	for rows.Next() {
-		var item volatilityItem
-		var closePrice, prevClose, pct float64
-		if err := rows.Scan(&item.Symbol, &item.CandleTS, &closePrice, &prevClose, &pct, &item.Timeframe); err != nil {
-			return nil, err
+	items := make([]volatilityItem, 0, len(snapshot.seriesBySymbol))
+	for symbol, candles := range snapshot.seriesBySymbol {
+		if len(candles) <= offset {
+			continue
 		}
-		item.Price.Close = closePrice
-		item.Price.PrevClose = prevClose
+		latest := candles[0]
+		prev := candles[offset]
+		if prev.Close == 0 {
+			continue
+		}
+
+		pct := ((latest.Close - prev.Close) / prev.Close) * 100
+		if math.Abs(pct) < threshold {
+			continue
+		}
+		if direction == "up" && pct <= 0 {
+			continue
+		}
+		if direction == "down" && pct >= 0 {
+			continue
+		}
+
+		item := volatilityItem{
+			Symbol:    symbol,
+			Timeframe: timeframe,
+			CandleTS:  latest.TS,
+		}
+		item.Price.Close = latest.Close
+		item.Price.PrevClose = prev.Close
 		item.Change.Pct = round4(pct)
 		if pct > 0 {
 			item.Change.Direction = "up"
@@ -149,8 +124,26 @@ func (s *apiServer) queryVolatility(timeframe string, threshold float64, offset 
 		}
 		items = append(items, item)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+
+	sort.Slice(items, func(i, j int) bool {
+		switch sortKey {
+		case "volatility_asc":
+			if items[i].Change.Pct == items[j].Change.Pct {
+				return items[i].Symbol < items[j].Symbol
+			}
+			return items[i].Change.Pct < items[j].Change.Pct
+		case "symbol_asc":
+			return items[i].Symbol < items[j].Symbol
+		default:
+			if items[i].Change.Pct == items[j].Change.Pct {
+				return items[i].Symbol < items[j].Symbol
+			}
+			return items[i].Change.Pct > items[j].Change.Pct
+		}
+	})
+
+	if limit < len(items) {
+		items = items[:limit]
 	}
 	return items, nil
 }
@@ -236,72 +229,78 @@ func (s *apiServer) volumeHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, volumeResponse{Count: len(items), Data: items})
 }
 
-func (s *apiServer) queryVolume(timeframe, period, sort string, limit int, minVolume float64, minVolumeTarget string) ([]volumeItem, error) {
-	table, err := safeTableName(timeframe)
+func (s *apiServer) queryVolume(timeframe, period, sortKey string, limit int, minVolume float64, minVolumeTarget string) ([]volumeItem, error) {
+	snapshot, err := s.marketCache.getSnapshot(timeframe)
 	if err != nil {
 		return nil, err
 	}
-
 	periodSeconds, err := parsePeriodToSeconds(period)
 	if err != nil {
 		return nil, err
 	}
 	startTSMS := time.Now().UTC().Add(-time.Duration(periodSeconds) * time.Second).UnixMilli()
 
-	orderBy := "total_volume DESC"
-	switch sort {
-	case "volume_asc":
-		orderBy = "total_volume ASC"
-	case "turnover_desc":
-		orderBy = "total_turnover DESC"
-	case "turnover_asc":
-		orderBy = "total_turnover ASC"
-	case "symbol_asc":
-		orderBy = "symbol ASC"
-	}
-
-	havingClause := ""
-	args := []any{startTSMS}
-	if minVolume > 0 {
-		if minVolumeTarget == "volume" {
-			havingClause = "HAVING SUM(volume) > ?"
-		} else {
-			havingClause = "HAVING SUM(turnover) > ?"
+	items := make([]volumeItem, 0, len(snapshot.seriesBySymbol))
+	for symbol, candles := range snapshot.seriesBySymbol {
+		item := volumeItem{
+			Symbol:    symbol,
+			Timeframe: timeframe,
+			Period:    period,
 		}
-		args = append(args, minVolume)
-	}
-	args = append(args, limit)
-
-	query := fmt.Sprintf(`
-		SELECT symbol, SUM(volume) as total_volume, SUM(turnover) as total_turnover
-		FROM %s
-		WHERE timestamp >= ?
-		GROUP BY symbol
-		%s
-		ORDER BY %s
-		LIMIT ?
-	`, table, havingClause, orderBy)
-
-	rows, err := s.db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	items := make([]volumeItem, 0)
-	for rows.Next() {
-		var item volumeItem
-		if err := rows.Scan(&item.Symbol, &item.TotalVolume, &item.TotalTurnover); err != nil {
-			return nil, err
+		hasRecent := false
+		for _, candle := range candles {
+			if candle.TS < startTSMS {
+				break
+			}
+			hasRecent = true
+			item.TotalVolume += candle.Volume
+			item.TotalTurnover += candle.Turnover
+		}
+		if !hasRecent {
+			continue
+		}
+		if minVolume > 0 {
+			if minVolumeTarget == "volume" && item.TotalVolume <= minVolume {
+				continue
+			}
+			if minVolumeTarget == "turnover" && item.TotalTurnover <= minVolume {
+				continue
+			}
 		}
 		item.TotalVolume = round4(item.TotalVolume)
 		item.TotalTurnover = round4(item.TotalTurnover)
-		item.Timeframe = timeframe
-		item.Period = period
 		items = append(items, item)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+
+	sort.Slice(items, func(i, j int) bool {
+		switch sortKey {
+		case "volume_asc":
+			if items[i].TotalVolume == items[j].TotalVolume {
+				return items[i].Symbol < items[j].Symbol
+			}
+			return items[i].TotalVolume < items[j].TotalVolume
+		case "turnover_desc":
+			if items[i].TotalTurnover == items[j].TotalTurnover {
+				return items[i].Symbol < items[j].Symbol
+			}
+			return items[i].TotalTurnover > items[j].TotalTurnover
+		case "turnover_asc":
+			if items[i].TotalTurnover == items[j].TotalTurnover {
+				return items[i].Symbol < items[j].Symbol
+			}
+			return items[i].TotalTurnover < items[j].TotalTurnover
+		case "symbol_asc":
+			return items[i].Symbol < items[j].Symbol
+		default:
+			if items[i].TotalVolume == items[j].TotalVolume {
+				return items[i].Symbol < items[j].Symbol
+			}
+			return items[i].TotalVolume > items[j].TotalVolume
+		}
+	})
+
+	if limit < len(items) {
+		items = items[:limit]
 	}
 	return items, nil
 }

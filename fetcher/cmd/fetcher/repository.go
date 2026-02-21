@@ -122,6 +122,9 @@ func configureSQLiteForWriter(db *sql.DB) error {
 		"PRAGMA busy_timeout = 10000",
 		"PRAGMA journal_mode = WAL",
 		"PRAGMA synchronous = NORMAL",
+		"PRAGMA cache_size = -65536",
+		"PRAGMA temp_store = MEMORY",
+		"PRAGMA mmap_size = 268435456",
 	}
 	for _, p := range pragmas {
 		if _, err := db.Exec(p); err != nil {

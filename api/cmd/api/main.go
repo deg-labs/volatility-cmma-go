@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/go-openapi/runtime/middleware"
 	_ "modernc.org/sqlite"
@@ -29,7 +30,16 @@ func main() {
 		historyLimit = 5
 	}
 
-	s := &apiServer{db: db, ohlcvHistoryLimit: historyLimit}
+	cacheRefreshSeconds, _ := strconv.Atoi(getEnv("CACHE_REFRESH_SECONDS", "5"))
+	if cacheRefreshSeconds <= 0 {
+		cacheRefreshSeconds = 5
+	}
+
+	s := &apiServer{
+		db:                db,
+		ohlcvHistoryLimit: historyLimit,
+		marketCache:       newMarketDataCache(db, historyLimit, time.Duration(cacheRefreshSeconds)*time.Second),
+	}
 	openAPISpec, err := buildOpenAPISpec()
 	if err != nil {
 		logger.Fatalf("openapi spec build failed: %v", err)
