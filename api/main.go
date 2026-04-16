@@ -46,7 +46,6 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", s.healthHandler)
 	mux.HandleFunc("/", s.rootHandler)
 	mux.HandleFunc("/volatility", s.volatilityHandler)
 	mux.HandleFunc("/volume", s.volumeHandler)
