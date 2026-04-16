@@ -31,6 +31,12 @@ services:
       - OHLCV_HISTORY_LIMIT=${OHLCV_HISTORY_LIMIT}
       - DB_PATH=/app/data/cmma.db
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8000/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     logging:
       driver: json-file
       options:
@@ -44,10 +50,17 @@ services:
     image: docker.io/library/nginx:latest
     container_name: volatility-cmma-go-nginx
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "8001:80"
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     logging:
       driver: json-file
       options:

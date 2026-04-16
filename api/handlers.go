@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net/http"
@@ -9,6 +10,23 @@ import (
 	"strings"
 	"time"
 )
+
+func (s *apiServer) healthHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), time.Second)
+	defer cancel()
+
+	if err := s.db.PingContext(ctx); err != nil {
+		writeError(w, http.StatusServiceUnavailable, "UNHEALTHY", "database unavailable")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
 
 func (s *apiServer) rootHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {

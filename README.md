@@ -77,6 +77,7 @@ API は `http://localhost:8001` で利用できます。
 
 - Swagger UI: `http://localhost:8001/volatility/docs`
 - OpenAPI JSON: `http://localhost:8001/volatility/openapi.json`
+- Health Check: `http://localhost:8001/healthz`
 
 ### エンドポイント: `GET /volatility`
 
