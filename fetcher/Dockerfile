@@ -5,7 +5,7 @@ RUN go mod download
 COPY fetcher ./fetcher
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=mod -o /out/fetcher ./fetcher
 
-FROM alpine:3.21
+FROM alpine:3.23
 RUN apk --no-cache add ca-certificates
 WORKDIR /app
 COPY --from=builder /out/fetcher /app/fetcher
