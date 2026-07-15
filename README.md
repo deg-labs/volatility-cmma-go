@@ -1,3 +1,24 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [volatility-cmma-go (crypto market metrics api)](#volatility-cmma-go-crypto-market-metrics-api)
+  - [機能](#%E6%A9%9F%E8%83%BD)
+  - [必要要件](#%E5%BF%85%E8%A6%81%E8%A6%81%E4%BB%B6)
+  - [実行方法](#%E5%AE%9F%E8%A1%8C%E6%96%B9%E6%B3%95)
+  - [環境変数](#%E7%92%B0%E5%A2%83%E5%A4%89%E6%95%B0)
+  - [API 利用方法](#api-%E5%88%A9%E7%94%A8%E6%96%B9%E6%B3%95)
+    - [API ドキュメント](#api-%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88)
+    - [エンドポイント: `GET /volatility`](#%E3%82%A8%E3%83%B3%E3%83%89%E3%83%9D%E3%82%A4%E3%83%B3%E3%83%88-get-volatility)
+    - [エンドポイント: `GET /volume`](#%E3%82%A8%E3%83%B3%E3%83%89%E3%83%9D%E3%82%A4%E3%83%B3%E3%83%88-get-volume)
+    - [エラーレスポンス](#%E3%82%A8%E3%83%A9%E3%83%BC%E3%83%AC%E3%82%B9%E3%83%9D%E3%83%B3%E3%82%B9)
+  - [注意事項](#%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A0%85)
+  - [停止](#%E5%81%9C%E6%AD%A2)
+  - [システム構成](#%E3%82%B7%E3%82%B9%E3%83%86%E3%83%A0%E6%A7%8B%E6%88%90)
+    - [Mermaid ダイアグラム](#mermaid-%E3%83%80%E3%82%A4%E3%82%A2%E3%82%B0%E3%83%A9%E3%83%A0)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 # volatility-cmma-go (crypto market metrics api)
 
 `volatility-cmma` の Go 実装版です。Bybit の USDT 無期限契約 OHLCV を定期収集し、価格変動率と出来高ランキングを API で提供します。
