@@ -100,7 +100,9 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func writeJSONStatus(w http.ResponseWriter, status int, payload any) {
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to encode JSON response: %v\n", err)
+	}
 }
 
 func round4(v float64) float64 {

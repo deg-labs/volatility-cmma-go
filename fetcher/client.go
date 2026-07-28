@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -102,10 +103,12 @@ func getKlineData(ctx context.Context, httpClient *http.Client, baseURL, symbol,
 	rows := make([]klineRow, 0, len(payload.Result.List))
 	for _, item := range payload.Result.List {
 		if len(item) < 7 {
+			log.Printf("Skipping malformed kline row for %s: expected at least 7 fields, got %d", symbol, len(item))
 			continue
 		}
 		ts, err := strconv.ParseInt(item[0], 10, 64)
 		if err != nil {
+			log.Printf("Skipping kline row for %s: invalid timestamp %q: %v", symbol, item[0], err)
 			continue
 		}
 		op, err1 := strconv.ParseFloat(item[1], 64)
@@ -115,6 +118,7 @@ func getKlineData(ctx context.Context, httpClient *http.Client, baseURL, symbol,
 		vol, err5 := strconv.ParseFloat(item[5], 64)
 		to, err6 := strconv.ParseFloat(item[6], 64)
 		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil || err6 != nil {
+			log.Printf("Skipping kline row for %s: invalid price or volume values", symbol)
 			continue
 		}
 		rows = append(rows, klineRow{TS: ts, Open: op, High: hi, Low: lo, Close: cl, Volume: vol, Turnover: to})
@@ -170,10 +174,12 @@ func getKlineDataByTimeRange(
 	rows := make([]klineRow, 0, len(payload.Result.List))
 	for _, item := range payload.Result.List {
 		if len(item) < 7 {
+			log.Printf("Skipping malformed range kline row for %s: expected at least 7 fields, got %d", symbol, len(item))
 			continue
 		}
 		ts, err := strconv.ParseInt(item[0], 10, 64)
 		if err != nil {
+			log.Printf("Skipping range kline row for %s: invalid timestamp %q: %v", symbol, item[0], err)
 			continue
 		}
 		op, err1 := strconv.ParseFloat(item[1], 64)
@@ -183,6 +189,7 @@ func getKlineDataByTimeRange(
 		vol, err5 := strconv.ParseFloat(item[5], 64)
 		to, err6 := strconv.ParseFloat(item[6], 64)
 		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil || err6 != nil {
+			log.Printf("Skipping range kline row for %s: invalid price or volume values", symbol)
 			continue
 		}
 		rows = append(rows, klineRow{TS: ts, Open: op, High: hi, Low: lo, Close: cl, Volume: vol, Turnover: to})
