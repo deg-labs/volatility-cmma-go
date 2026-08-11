@@ -57,7 +57,16 @@ func (c *marketDataCache) getSnapshot(timeframe string) (marketSnapshot, error) 
 		return snapshot, nil
 	}
 
-	return c.refreshSnapshot(timeframe, now)
+	// First access: refresh in the background and return an empty snapshot
+	// immediately instead of blocking the request on a synchronous full scan.
+	c.refreshSnapshotAsync(timeframe)
+	return marketSnapshot{seriesBySymbol: make(map[string][]marketCandle), refreshedAt: now}, nil
+}
+
+func (c *marketDataCache) warmup(timeframes []string) {
+	for _, tf := range timeframes {
+		c.refreshSnapshotAsync(tf)
+	}
 }
 
 func (c *marketDataCache) refreshSnapshot(timeframe string, now time.Time) (marketSnapshot, error) {
