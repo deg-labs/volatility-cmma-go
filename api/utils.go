@@ -135,7 +135,6 @@ func getEnv(key, fallback string) string {
 func configureSQLiteForReader(db *sql.DB) error {
 	pragmas := []string{
 		"PRAGMA busy_timeout = 1000",
-		"PRAGMA journal_mode = WAL",
 		"PRAGMA query_only = ON",
 		"PRAGMA cache_size = -65536",
 		"PRAGMA temp_store = MEMORY",
@@ -145,6 +144,20 @@ func configureSQLiteForReader(db *sql.DB) error {
 		if _, err := db.Exec(p); err != nil {
 			return err
 		}
+	}
+
+	// WALは書き込み可能な場合にのみ必要。読み取り専用マウントでは設定に失敗するため、
+	// 既にWALになっている場合は変更せず、失敗しても致命的にしない。
+	var journalMode string
+	if err := db.QueryRow("PRAGMA journal_mode").Scan(&journalMode); err != nil {
+		log.Printf("failed to read journal_mode: %v", err)
+		return nil
+	}
+	if journalMode == "wal" {
+		return nil
+	}
+	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+		log.Printf("WAL pragma skipped (read-only mount?): %v", err)
 	}
 	return nil
 }
