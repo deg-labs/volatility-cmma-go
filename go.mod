@@ -3,7 +3,7 @@ module volatility-cmma-go
 go 1.25.0
 
 require (
-	github.com/go-openapi/runtime v0.32.6
+	github.com/go-openapi/runtime v0.33.0
 	github.com/go-openapi/spec v0.22.9
 	modernc.org/sqlite v1.56.0
 )
