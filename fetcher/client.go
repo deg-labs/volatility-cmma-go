@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -111,14 +112,14 @@ func getKlineData(ctx context.Context, httpClient *http.Client, baseURL, symbol,
 			log.Printf("Skipping kline row for %s: invalid timestamp %q: %v", symbol, item[0], err)
 			continue
 		}
-		op, err1 := strconv.ParseFloat(item[1], 64)
-		hi, err2 := strconv.ParseFloat(item[2], 64)
-		lo, err3 := strconv.ParseFloat(item[3], 64)
-		cl, err4 := strconv.ParseFloat(item[4], 64)
-		vol, err5 := strconv.ParseFloat(item[5], 64)
-		to, err6 := strconv.ParseFloat(item[6], 64)
-		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil || err6 != nil {
-			log.Printf("Skipping kline row for %s: invalid price or volume values", symbol)
+		op, ok1 := parseFiniteFloat(item[1])
+		hi, ok2 := parseFiniteFloat(item[2])
+		lo, ok3 := parseFiniteFloat(item[3])
+		cl, ok4 := parseFiniteFloat(item[4])
+		vol, ok5 := parseFiniteFloat(item[5])
+		to, ok6 := parseFiniteFloat(item[6])
+		if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 || !ok6 {
+			log.Printf("Skipping kline row for %s: invalid (non-finite) price or volume values", symbol)
 			continue
 		}
 		rows = append(rows, klineRow{TS: ts, Open: op, High: hi, Low: lo, Close: cl, Volume: vol, Turnover: to})
@@ -182,19 +183,27 @@ func getKlineDataByTimeRange(
 			log.Printf("Skipping range kline row for %s: invalid timestamp %q: %v", symbol, item[0], err)
 			continue
 		}
-		op, err1 := strconv.ParseFloat(item[1], 64)
-		hi, err2 := strconv.ParseFloat(item[2], 64)
-		lo, err3 := strconv.ParseFloat(item[3], 64)
-		cl, err4 := strconv.ParseFloat(item[4], 64)
-		vol, err5 := strconv.ParseFloat(item[5], 64)
-		to, err6 := strconv.ParseFloat(item[6], 64)
-		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil || err6 != nil {
-			log.Printf("Skipping range kline row for %s: invalid price or volume values", symbol)
+		op, ok1 := parseFiniteFloat(item[1])
+		hi, ok2 := parseFiniteFloat(item[2])
+		lo, ok3 := parseFiniteFloat(item[3])
+		cl, ok4 := parseFiniteFloat(item[4])
+		vol, ok5 := parseFiniteFloat(item[5])
+		to, ok6 := parseFiniteFloat(item[6])
+		if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 || !ok6 {
+			log.Printf("Skipping range kline row for %s: invalid (non-finite) price or volume values", symbol)
 			continue
 		}
 		rows = append(rows, klineRow{TS: ts, Open: op, High: hi, Low: lo, Close: cl, Volume: vol, Turnover: to})
 	}
 	return rows, nil
+}
+
+func parseFiniteFloat(s string) (float64, bool) {
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, false
+	}
+	return f, true
 }
 
 func runBybitWithRetry(ctx context.Context, operation string, fn func() error) error {
