@@ -22,7 +22,7 @@ func main() {
 	defer db.Close()
 
 	if err := configureSQLiteForReader(db); err != nil {
-		logger.Printf("warning: sqlite pragma configuration incomplete: %v", err)
+		logger.Fatalf("set sqlite pragma failed: %v", err)
 	}
 
 	historyLimit, _ := strconv.Atoi(getEnv("OHLCV_HISTORY_LIMIT", "5"))

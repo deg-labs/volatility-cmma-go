@@ -146,16 +146,8 @@ func configureSQLiteForReader(db *sql.DB) error {
 		}
 	}
 
-	// WALは書き込み可能な場合にのみ必要。読み取り専用マウントでは設定に失敗するため、
-	// 既にWALになっている場合は変更せず、失敗しても致命的にしない。
-	var journalMode string
-	if err := db.QueryRow("PRAGMA journal_mode").Scan(&journalMode); err != nil {
-		log.Printf("failed to read journal_mode: %v", err)
-		return nil
-	}
-	if journalMode == "wal" {
-		return nil
-	}
+	// WALは書き込み可能な場合にのみ変更できる。読み取り専用マウントでは
+	// この変更だけ失敗し得るため、他のPRAGMAとは異なり起動を止めない。
 	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
 		log.Printf("WAL pragma skipped (read-only mount?): %v", err)
 	}
