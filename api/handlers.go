@@ -32,7 +32,7 @@ func (s *apiServer) volatilityHandler(w http.ResponseWriter, r *http.Request) {
 
 	threshold, err := parsePositiveFloat(r.URL.Query().Get("threshold"))
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, "INVALID_INPUT", "threshold は0より大きい数値を指定してください")
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "threshold は0より大きい有限の数値を指定してください")
 		return
 	}
 
@@ -188,7 +188,7 @@ func (s *apiServer) volumeHandler(w http.ResponseWriter, r *http.Request) {
 	if raw := strings.TrimSpace(r.URL.Query().Get("min_volume")); raw != "" {
 		minVolume, err = parsePositiveFloat(raw)
 		if err != nil {
-			writeError(w, http.StatusUnprocessableEntity, "INVALID_INPUT", "min_volume は0より大きい数値を指定してください")
+			writeError(w, http.StatusBadRequest, "INVALID_INPUT", "min_volume は0より大きい有限の数値を指定してください")
 			return
 		}
 	}

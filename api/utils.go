@@ -70,7 +70,7 @@ func parsePeriodToSeconds(s string) (int, error) {
 
 func parsePositiveFloat(v string) (float64, error) {
 	f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-	if err != nil || f <= 0 {
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f <= 0 {
 		return 0, errors.New("invalid number")
 	}
 	return f, nil
