@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -62,21 +61,9 @@ func main() {
 
 	addr := ":8000"
 	logger.Printf("api started on %s", addr)
-	if err := http.ListenAndServe(addr, withRecovery(withJSONContentType(handler))); err != nil {
+	if err := http.ListenAndServe(addr, withJSONContentType(handler)); err != nil {
 		logger.Fatalf("server error: %v", err)
 	}
-}
-
-func withRecovery(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if rec := recover(); rec != nil {
-				log.Printf("panic recovered path=%s: %v\n%s", r.URL.Path, rec, debug.Stack())
-				writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
-			}
-		}()
-		next.ServeHTTP(w, r)
-	})
 }
 
 func withJSONContentType(next http.Handler) http.Handler {
