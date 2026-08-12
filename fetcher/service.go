@@ -51,6 +51,11 @@ func fetchAndStore(ctx context.Context, logger *log.Logger, httpClient *http.Cli
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Printf("panic in kline fetch goroutine symbol=%s tf=%s: %v", s, timeframe, r)
+					}
+				}()
 				select {
 				case sem <- struct{}{}:
 				case <-ctx.Done():
@@ -148,6 +153,11 @@ func backfillMissingByTimestamp(
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Printf("panic in gap fill goroutine symbol=%s tf=%s: %v", s, timeframe, r)
+				}
+			}()
 			select {
 			case sem <- struct{}{}:
 			case <-ctx.Done():

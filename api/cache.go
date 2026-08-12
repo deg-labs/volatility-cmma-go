@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 )
@@ -132,6 +133,11 @@ func (c *marketDataCache) refreshSnapshotAsync(timeframe string) {
 			c.mu.Lock()
 			c.refreshing[timeframe] = false
 			c.mu.Unlock()
+		}()
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("panic in snapshot refresh for %s: %v", timeframe, r)
+			}
 		}()
 		_, _ = c.refreshSnapshot(timeframe, time.Now().UTC())
 	}()
