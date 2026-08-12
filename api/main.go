@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -60,9 +61,20 @@ func main() {
 	}, handler)
 	handler = middleware.Spec("/", openAPISpec, handler, middleware.WithSpecPath("volatility"), middleware.WithSpecDocument("openapi.json"))
 
+	s.marketCache.warmup(validTimeframes)
+
 	addr := ":8000"
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           withJSONContentType(handler),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
 	logger.Printf("api started on %s", addr)
-	if err := http.ListenAndServe(addr, withJSONContentType(handler)); err != nil {
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Fatalf("server error: %v", err)
 	}
 }
