@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"os"
@@ -70,7 +71,7 @@ func parsePeriodToSeconds(s string) (int, error) {
 
 func parsePositiveFloat(v string) (float64, error) {
 	f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-	if err != nil || f <= 0 {
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f <= 0 {
 		return 0, errors.New("invalid number")
 	}
 	return f, nil
@@ -99,10 +100,15 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func writeJSONStatus(w http.ResponseWriter, status int, payload any) {
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to encode JSON response: %v\n", err)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("failed to encode JSON response: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, `{"error":{"code":"INTERNAL_ERROR","message":"internal error"}}`)
+		return
 	}
+	w.WriteHeader(status)
+	_, _ = w.Write(data)
 }
 
 func round4(v float64) float64 {

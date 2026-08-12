@@ -32,7 +32,7 @@ func (s *apiServer) volatilityHandler(w http.ResponseWriter, r *http.Request) {
 
 	threshold, err := parsePositiveFloat(r.URL.Query().Get("threshold"))
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, "INVALID_INPUT", "threshold は0より大きい数値を指定してください")
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "threshold は0より大きい有限の数値を指定してください")
 		return
 	}
 
@@ -74,7 +74,8 @@ func (s *apiServer) volatilityHandler(w http.ResponseWriter, r *http.Request) {
 
 	items, queryErr := s.queryVolatility(timeframe, threshold, offset, direction, sort, limit)
 	if queryErr != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", queryErr.Error())
+		s.logger.Printf("volatility query error timeframe=%s: %v", timeframe, queryErr)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
 		return
 	}
 
@@ -188,7 +189,7 @@ func (s *apiServer) volumeHandler(w http.ResponseWriter, r *http.Request) {
 	if raw := strings.TrimSpace(r.URL.Query().Get("min_volume")); raw != "" {
 		minVolume, err = parsePositiveFloat(raw)
 		if err != nil {
-			writeError(w, http.StatusUnprocessableEntity, "INVALID_INPUT", "min_volume は0より大きい数値を指定してください")
+			writeError(w, http.StatusBadRequest, "INVALID_INPUT", "min_volume は0より大きい有限の数値を指定してください")
 			return
 		}
 	}
@@ -222,7 +223,8 @@ func (s *apiServer) volumeHandler(w http.ResponseWriter, r *http.Request) {
 
 	items, queryErr := s.queryVolume(timeframe, period, sort, limit, minVolume, minVolumeTarget)
 	if queryErr != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", queryErr.Error())
+		s.logger.Printf("volume query error timeframe=%s period=%s: %v", timeframe, period, queryErr)
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
 		return
 	}
 

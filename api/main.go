@@ -36,6 +36,7 @@ func main() {
 	}
 
 	s := &apiServer{
+		logger:            logger,
 		db:                db,
 		ohlcvHistoryLimit: historyLimit,
 		marketCache:       newMarketDataCache(db, historyLimit, time.Duration(cacheRefreshSeconds)*time.Second),

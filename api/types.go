@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"log"
 	"regexp"
 )
 
@@ -51,6 +52,7 @@ type volumeItem struct {
 }
 
 type apiServer struct {
+	logger            *log.Logger
 	db                *sql.DB
 	ohlcvHistoryLimit int
 	marketCache       *marketDataCache
