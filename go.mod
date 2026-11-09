@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/go-openapi/runtime v0.33.4
 	github.com/go-openapi/spec v1.0.1
-	modernc.org/sqlite v1.61.0
+	modernc.org/sqlite v1.61.1
 )
 
 require (
